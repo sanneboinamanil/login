@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>8-Hour Workday Calculator</title>
+</head>
+<body>
+  <h2>8-Hour Workday Calculator</h2>
+
+  <p>Paste your punch-in/punch-out records below (exactly as copied from your biometric system):</p>
+
+  <textarea id="input" rows="20" cols="60" placeholder="Punch In&#10;BIOMETRIC&#10;08:58:53 AM&#10;Punch Out&#10;..."></textarea><br><br>
+
+  <button onclick="calculateLogout()">Calculate Logout Time</button>
+
+  <h3 id="result"></h3>
+
+  <script>
+    function parseTime12HourToDate(timeStr) {
+      const [time, modifier] = timeStr.split(' ');
+      let [hours, minutes, seconds] = time.split(':').map(Number);
+
+      if (modifier === 'PM' && hours < 12) {
+        hours += 12;
+      }
+      if (modifier === 'AM' && hours === 12) {
+        hours = 0;
+      }
+
+      const date = new Date();
+      date.setHours(hours, minutes, seconds, 0);
+      return date;
+    }
+
+    function calculateLogout() {
+      const rawInput = document.getElementById("input").value;
+      const lines = rawInput.split('\n');
+
+      const timeEntries = [];
+
+      for (let line of lines) {
+        const match = line.match(/\d{2}:\d{2}:\d{2} (AM|PM)/);
+        if (match) {
+          timeEntries.push(match[0]);
+        }
+      }
+
+      let totalMinutes = 0;
+      let lastPunchIn = null;
+
+      for (let i = 0; i < timeEntries.length; i += 2) {
+        const inTime = parseTime12HourToDate(timeEntries[i]);
+        const outTime = timeEntries[i + 1] ? parseTime12HourToDate(timeEntries[i + 1]) : null;
+
+        if (outTime) {
+          const diff = (outTime - inTime) / 60000; 
+          totalMinutes += diff;
+        } else {
+          lastPunchIn = inTime;
+        }
+      }
+
+      const requiredMinutes = 480; 
+      const remaining = requiredMinutes - totalMinutes;
+
+      const result = document.getElementById("result");
+
+      if (remaining <= 0) {
+        result.innerText = "✅ You have already completed 8 hours!";
+        return;
+      }
+
+      if (!lastPunchIn) {
+        result.innerText = "⚠️ Error: No active punch-in session found for today.";
+        return;
+      }
+
+      const logoutTime = new Date(lastPunchIn.getTime() + remaining * 60000);
+      const logoutFormatted = logoutTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+
+      result.innerText = `🕔 Suggested Logout Time: ${logoutFormatted}`;
+    }
+  </script>
+</body>
+</html>
