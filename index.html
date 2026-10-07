@@ -1,47 +1,155 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>8-Hour Workday Calculator</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workday Calculator</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --border: #d1d5db;
+      --ok: #166534;
+      --ok-bg: #dcfce7;
+      --warn: #92400e;
+      --warn-bg: #fef3c7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+    .card {
+      max-width: 560px;
+      margin: 0 auto;
+      background: var(--card);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+    h2 { margin: 0 0 6px; }
+    p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .row label { font-weight: 600; font-size: 14px; }
+    select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 15px;
+      background: #fff;
+    }
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: Consolas, monospace;
+      font-size: 14px;
+      resize: vertical;
+    }
+    select:focus, textarea:focus {
+      outline: 2px solid var(--primary);
+      border-color: transparent;
+    }
+    button {
+      margin-top: 14px;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: var(--primary-dark); }
+    #result { margin-top: 18px; }
+    .msg { padding: 12px 14px; border-radius: 8px; font-size: 16px; font-weight: 600; }
+    .msg.ok { background: var(--ok-bg); color: var(--ok); }
+    .msg.warn { background: var(--warn-bg); color: var(--warn); }
+    .details { margin-top: 8px; font-size: 13px; color: var(--muted); font-weight: 400; }
+  </style>
 </head>
 <body>
-  <h2>8-Hour Workday Calculator</h2>
+  <div class="card">
+    <h2>Workday Calculator</h2>
+    <p>Paste your punch-in/punch-out records exactly as copied from your biometric system.</p>
 
-  <p>Paste your punch-in/punch-out records below (exactly as copied from your biometric system):</p>
+    <div class="row">
+      <label>Required time:</label>
+      <select id="reqHours" onchange="recalcIfFilled()"></select> hr
+      <select id="reqMinutes" onchange="recalcIfFilled()"></select> min
+    </div>
 
-  <textarea id="input" rows="20" cols="60" placeholder="Punch In&#10;BIOMETRIC&#10;08:58:53 AM&#10;Punch Out&#10;..."></textarea><br><br>
+    <textarea id="input" rows="14" placeholder="Punch In&#10;BIOMETRIC&#10;08:58:53 AM&#10;Punch Out&#10;..."></textarea>
 
-  <button onclick="calculateLogout()">Calculate Logout Time</button>
+    <button onclick="calculateLogout()">Calculate Logout Time</button>
 
-  <h3 id="result"></h3>
+    <div id="result"></div>
+  </div>
 
   <script>
+    // Fill the hour (0-12) and minute (0-59) dropdowns; default 8h 00m
+    (function initSelects() {
+      const h = document.getElementById("reqHours");
+      const m = document.getElementById("reqMinutes");
+      for (let i = 0; i <= 12; i++) h.add(new Option(i, i));
+      for (let i = 0; i < 60; i++) m.add(new Option(String(i).padStart(2, "0"), i));
+      h.value = 8;
+      m.value = 0;
+    })();
+
+    function recalcIfFilled() {
+      if (document.getElementById("input").value.trim()) calculateLogout();
+    }
+
     function parseTime12HourToDate(timeStr) {
       const [time, modifier] = timeStr.split(' ');
       let [hours, minutes, seconds] = time.split(':').map(Number);
 
-      if (modifier === 'PM' && hours < 12) {
-        hours += 12;
-      }
-      if (modifier === 'AM' && hours === 12) {
-        hours = 0;
-      }
+      if (modifier === 'PM' && hours < 12) hours += 12;
+      if (modifier === 'AM' && hours === 12) hours = 0;
 
       const date = new Date();
       date.setHours(hours, minutes, seconds, 0);
       return date;
     }
 
-    function calculateLogout() {
-      const rawInput = document.getElementById("input").value;
-      const lines = rawInput.split('\n');
+    function formatDuration(totalMinutes) {
+      const m = Math.max(0, Math.round(totalMinutes));
+      return `${Math.floor(m / 60)} hr ${m % 60} min`;
+    }
 
+    function show(text, type, details) {
+      const result = document.getElementById("result");
+      result.innerHTML = "";
+      const box = document.createElement("div");
+      box.className = "msg " + type;
+      box.textContent = text;
+      if (details) {
+        const d = document.createElement("div");
+        d.className = "details";
+        d.textContent = details;
+        box.appendChild(d);
+      }
+      result.appendChild(box);
+    }
+
+    function calculateLogout() {
+      const lines = document.getElementById("input").value.split('\n');
       const timeEntries = [];
 
-      for (let line of lines) {
+      for (const line of lines) {
         const match = line.match(/\d{2}:\d{2}:\d{2} (AM|PM)/);
-        if (match) {
-          timeEntries.push(match[0]);
-        }
+        if (match) timeEntries.push(match[0]);
       }
 
       let totalMinutes = 0;
@@ -52,37 +160,34 @@
         const outTime = timeEntries[i + 1] ? parseTime12HourToDate(timeEntries[i + 1]) : null;
 
         if (outTime) {
-          const diff = (outTime - inTime) / 60000; 
-          totalMinutes += diff;
+          totalMinutes += (outTime - inTime) / 60000;
         } else {
           lastPunchIn = inTime;
         }
       }
 
-      const requiredMinutes = 480; 
+      const requiredMinutes =
+        Number(document.getElementById("reqHours").value) * 60 +
+        Number(document.getElementById("reqMinutes").value);
       const remaining = requiredMinutes - totalMinutes;
 
-      const result = document.getElementById("result");
-
       if (remaining <= 0) {
-        result.innerText = "✅ You have already completed 8 hours!";
+        show(`✅ You have already completed ${formatDuration(requiredMinutes)}!`, "ok");
         return;
       }
 
       if (!lastPunchIn) {
-        result.innerText = "⚠️ Error: No active punch-in session found for today.";
+        show("⚠️ Error: No active punch-in session found for today.", "warn");
         return;
       }
 
       const logoutTime = new Date(lastPunchIn.getTime() + remaining * 60000);
       const logoutFormatted = logoutTime.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
       });
 
-      result.innerText = `🕔 Suggested Logout Time: ${logoutFormatted}`;
+      show(`🕔 Suggested Logout Time: ${logoutFormatted}`, "ok",
+        `Required ${formatDuration(requiredMinutes)} · Worked ${formatDuration(totalMinutes)} · Remaining ${formatDuration(remaining)}`);
     }
   </script>
 </body>
